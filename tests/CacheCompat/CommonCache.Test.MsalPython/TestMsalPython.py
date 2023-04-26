@@ -40,9 +40,7 @@ class ExecutionContext:
 #sys.argv.append("--input")
 #sys.argv.append("c:\\temp\\tmp2B95.tmp")
 
-cmdlineargs = {}
-cmdlineargs["inputFilePath"] = sys.argv[2]
-
+cmdlineargs = {"inputFilePath": sys.argv[2]}
 print(os.path.dirname(os.path.realpath(__file__)))
 print(sys.argv[2])
 with open(sys.argv[2], 'r') as fp:
@@ -53,10 +51,10 @@ the_scopes = [ testInput['Scope'] ]
 cache = msal.SerializableTokenCache()
 
 cacheFilePath = testInput['CacheFilePath']
-print('CacheFilePath: ' + cacheFilePath)
+print(f'CacheFilePath: {cacheFilePath}')
 
 resultsFilePath = testInput['ResultsFilePath']
-print('ResultsFilePath: ' + resultsFilePath)
+print(f'ResultsFilePath: {resultsFilePath}')
 
 atexit.register(lambda:
     open(cacheFilePath, 'w').write(cache.serialize())
@@ -72,7 +70,7 @@ for labUserData in testInput['LabUserDatas']:
     app = msal.PublicClientApplication(labUserData['ClientId'], authority=labUserData['Authority'], token_cache=cache)
 
     upn = labUserData['Upn']
-    print('Handling labUserData.Upn = ' + upn)
+    print(f'Handling labUserData.Upn = {upn}')
     accounts = app.get_accounts(username=upn)
 
     result = None
@@ -81,20 +79,20 @@ for labUserData in testInput['LabUserDatas']:
         result = app.acquire_token_silent(the_scopes, account=accounts[0])
 
     if result:
-        print("got token for '" + upn + "' from the cache")
+        print(f"got token for '{upn}' from the cache")
         results.append(CacheExecutorAccountResult(upn, accounts[0]["username"] if accounts else "n/a", True))
+    elif result := app.acquire_token_by_username_password(
+        upn, labUserData['Password'], scopes=the_scopes
+    ):
+        print(f"got token for '{upn}' by signing in with credentials")
+        print(result)
+        results.append(CacheExecutorAccountResult(upn, result.get("id_token_claims", {}).get("preferred_username"), False))
     else:
-        result = app.acquire_token_by_username_password(upn, labUserData['Password'], scopes=the_scopes)
-        if result:
-            print("got token for '" + upn + "' by signing in with credentials")
-            print(result)
-            results.append(CacheExecutorAccountResult(upn, result.get("id_token_claims", {}).get("preferred_username"), False))
-        else:
-            print("** ACQUIRE TOKEN FAILURE **")
-            print(result.get("error"))
-            print(result.get("error_description"))
-            print(result.get("correlation_id")) 
-            results.append(CacheExecutorAccountResult(upn, '', False))
+        print("** ACQUIRE TOKEN FAILURE **")
+        print(result.get("error"))
+        print(result.get("error_description"))
+        print(result.get("correlation_id"))
+        results.append(CacheExecutorAccountResult(upn, '', False))
 
 executionContext = ExecutionContext(False, '', results)
 json = executionContext.toJSON()
